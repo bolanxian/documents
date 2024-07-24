@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh">
 
 <head>
   <meta charset="utf-8">
@@ -43,6 +43,12 @@
     canvas {
       background: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAIAAAAC64paAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAsSURBVDhPYziLF/zHC0Y1YwCoKhxgRGqG0jgA1AwcYFQzBoCqwgFGnuazZwGTizZd/UjqewAAAABJRU5ErkJggg") repeat
     }
+
+    ruby,
+    ruby>rt {
+      text-align: center;
+      ruby-align: center;
+    }
   </style>
 </head>
 
@@ -76,12 +82,10 @@
           }
         },
         mounted() {
-          this.lyrics = '[A-a-]'
+          this.lyrics = '[敏捷的棕色狐狸跳过懒惰的狗-The quick brown fox jumps over the lazy dog.-]'
           this.style = `\
 font-family: Gen Jyuu Gothic Medium;
 font-size: 68px;
-text-align: center;
-display: inline-block;
 `
           this.color = '#FFF'
         },
@@ -90,6 +94,8 @@ display: inline-block;
             const vm = this
 
             const cssText = `${vm.style};
+text-align: center;
+display: inline-block;
 background-color: #FFF;
 color: #000;
 `
@@ -105,11 +111,48 @@ color: #000;
               vm.log = `${i}/${lyrics.length}`
               const el = document.createElement('div')
               el.style.cssText = cssText
-              el.innerHTML = lyrics[i].replace(/\[(.*?)-(.*?)-\]/g, '<ruby>$1<rp>-</rp><rt>$2</rt><rp>-</rp></ruby>')
+              el.innerHTML = ((lyric) => {
+                let i = 0, ret = ''
+                for (const m of lyric.matchAll(/\[(.*?)-(.*?)-\]/g)) {
+                  if (i < m.index) {
+                    ret += `<span>${lyric.slice(i, m.index)}</span>`
+                  }
+                  ret += `<ruby>${m[1]}<rp>-</rp><rt>${m[2]}</rt><rp>-</rp></ruby>`
+                  i = m.index + m[0].length
+                }
+                if (i < lyric.length) {
+                  ret += `<span>${lyric.slice(i, lyric.length)}</span>`
+                }
+                return ret
+              })(lyrics[i])
               texts.append(el)
               await delay(10)
 
-              const canvas = await html2canvas(el)
+              const canvas = await (async (el) => {
+                if (!0) {
+                  return await html2canvas(el)
+                }
+                const list = await Promise.all(Array.from(el.children, async (el) => {
+                  return await createImageBitmap(await html2canvas(el))
+                }))
+                let width = 0, height = 0
+                for (const img of list) {
+                  width += img.width
+                  height = Math.max(height, img.height)
+                }
+                const canvas = document.createElement('canvas')
+                Object.assign(canvas, { width, height })
+                const ctx = canvas.getContext('2d')
+                ctx.fillStyle = '#FFFFFFFF'
+                ctx.rect(0, 0, width, height)
+                ctx.fill()
+                let dx = 0; for (const img of list) {
+                  ctx.drawImage(img, dx, height - img.height)
+                  dx += img.width
+                }
+                return canvas
+              })(el)
+
               const { width, height } = canvas
               if (!(width + height > 0)) { continue }
               const ctx = canvas.getContext('2d')
@@ -221,7 +264,7 @@ color: #000;
                 _c(Row, { staticStyle: { margin: '16px 0 0 0' } }, [
                   _c(Col, { attrs: { offset: 2, span: 22 } }, [
                     vm.fileURL != null
-                      ? _c('a', { attrs: { href: vm.fileURL } }, [_v(vm.fileURL)])
+                      ? _c('a', { attrs: { href: vm.fileURL, download: vm.file.name } }, [_v(vm.fileURL)])
                       : _e('')
                   ])
                 ])
