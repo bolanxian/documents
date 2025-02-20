@@ -5,12 +5,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lyrics Render</title>
-  <script src="https://cdn.jsdelivr.net/npm/vue@2.7.16/dist/vue.runtime.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/view-design@4.7.0/dist/iview.min.js"></script>
-  <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/view-design@4.7.0/dist/styles/iview.css">
+  <link rel="icon"
+    href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%22-50%20-59%20100%20100%22%3E%3Ctext%20font-size%3D%2290%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%3E%F0%9F%93%9D%3C%2Ftext%3E%3C%2Fsvg%3E">
+  <script src="https://unpkg.com/vue@2.7.16/dist/vue.runtime.min.js"></script>
+  <script src="https://unpkg.com/view-design@4.7.0/dist/iview.min.js"></script>
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/view-design@4.7.0/dist/styles/iview.css">
 
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"></script>
+  <script src="https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://unpkg.com/fflate@0.8.2/umd/index.js"></script>
   <style>
     .container {
       margin: 0 auto;
@@ -45,9 +47,35 @@
     }
 
     ruby,
-    ruby>rt {
+    rt {
       text-align: center;
       ruby-align: center;
+    }
+
+
+    .text {
+      all: initial;
+      background-color: #FFF;
+      width: max-content !important;
+      text-align: center !important;
+      display: block !important;
+      color: #000 !important;
+    }
+  </style>
+  <style class="user-custom">
+    .text {
+      font-family: "Gen Jyuu Gothic Medium";
+      --font-family: "Resource Han Rounded CN Medium";
+      font-size: 68px;
+    }
+
+    .text rt {
+      font-size: .5em;
+    }
+
+    .background :is(span, ruby, rt) {
+      --background-image: var(--rainbow-vertical);
+      background-color: #FFF;
     }
   </style>
 </head>
@@ -60,7 +88,12 @@
     })(this, function (Vue, iview, html2canvas, fflate) {
       'use strict'
       const { Row, Col, Input, Button, Switch } = iview
-      const delay = t => new Promise(ok => { setTimeout(ok, t) })
+      const raf = requestAnimationFrame
+      const nextFrame = () => new Promise(raf)
+      const ready = new Promise(ok => {
+        if (document.hasFocus()) { return ok() }
+        document.addEventListener('focus', ok, { once: !0, capture: !0 })
+      })
 
       const _vm = new Vue({
         data() {
@@ -73,51 +106,46 @@
         },
         watch: {
           file(file, old) {
+            this.fileURL = file != null ? URL.createObjectURL(file) : null
+          },
+          fileURL(url, old) {
             if (old != null) { URL.revokeObjectURL(old) }
-            if (file != null) {
-              this.fileURL = URL.createObjectURL(file)
-            } else {
-              this.fileURL = null
-            }
           }
         },
         mounted() {
           this.lyrics = '[敏捷的棕色狐狸跳过懒惰的狗-The quick brown fox jumps over the lazy dog.-]'
-          this.style = `\
-font-family: Gen Jyuu Gothic Medium;
-font-size: 68px;
-`
-          this.color = '#FFF'
+          let style = document.querySelector('style.user-custom').textContent
+          style = style.replace(/^\s*(?<=\n)|(?=\n)\s*$/g, '')
+          const start = style.match(/^(\s*)[^\n]*?(?:\n|\n\1[^\n]*?)+$/)?.[1].length
+          style = style.split('\n').map(line => line.slice(start)).join('\n')
+          switch (location.hash) {
+            case '#mujica': {
+              this.lyrics = '[颂-ソ-][乐-ラ-][人-にん-][偶-ぎょう-]'
+              style = style.replace('--font-family', 'font-family')
+              style = style.replace('font-size: .5em', 'font-size: .33em')
+              style = style.replace('--background-image: var(--rainbow-vertical);',
+                'background-image: linear-gradient(.5turn,#E06 25%,#203 80%);')
+            } break
+          }
+          this.style = style
         },
         methods: {
           async handleInner() {
-            const vm = this
-
-            const cssText = `${vm.style};
-text-align: center;
-display: inline-block;
-background-color: #FFF;
-color: #000;
-`
-            const el = document.createElement('div')
-            el.style.color = vm.color
-            const m = el.style.color.match(/(\d+),\s*(\d+),\s*(\d+)/)
-            const r = +m[1], g = +m[2], b = +m[3]
-
+            const vm = this, { texts } = vm.$refs
+            document.querySelector('style.user-custom').textContent = vm.style
             const lyrics = vm.lyrics.split('\n')
-            const { texts } = vm.$refs
             const files = {}
             let i = 0; for (; i < lyrics.length; i++) {
               vm.log = `${i}/${lyrics.length}`
               const el = document.createElement('div')
-              el.style.cssText = cssText
+              el.classList.add('text')
               el.innerHTML = ((lyric) => {
                 let i = 0, ret = ''
                 for (const m of lyric.matchAll(/\[(.*?)-(.*?)-\]/g)) {
                   if (i < m.index) {
                     ret += `<span>${lyric.slice(i, m.index)}</span>`
                   }
-                  ret += `<ruby>${m[1]}<rp>-</rp><rt>${m[2]}</rt><rp>-</rp></ruby>`
+                  ret += `<ruby><rp>[</rp>${m[1]}<rp>-</rp><rt>${m[2]}</rt><rp>-]</rp></ruby>`
                   i = m.index + m[0].length
                 }
                 if (i < lyric.length) {
@@ -126,33 +154,8 @@ color: #000;
                 return ret
               })(lyrics[i])
               texts.append(el)
-              await delay(10)
-
-              const canvas = await (async (el) => {
-                if (!0) {
-                  return await html2canvas(el)
-                }
-                const list = await Promise.all(Array.from(el.children, async (el) => {
-                  return await createImageBitmap(await html2canvas(el))
-                }))
-                let width = 0, height = 0
-                for (const img of list) {
-                  width += img.width
-                  height = Math.max(height, img.height)
-                }
-                const canvas = document.createElement('canvas')
-                Object.assign(canvas, { width, height })
-                const ctx = canvas.getContext('2d')
-                ctx.fillStyle = '#FFFFFFFF'
-                ctx.rect(0, 0, width, height)
-                ctx.fill()
-                let dx = 0; for (const img of list) {
-                  ctx.drawImage(img, dx, height - img.height)
-                  dx += img.width
-                }
-                return canvas
-              })(el)
-
+              await nextFrame()
+              const canvas = await html2canvas(el)
               const { width, height } = canvas
               if (!(width + height > 0)) { continue }
               const ctx = canvas.getContext('2d')
@@ -161,13 +164,21 @@ color: #000;
               for (let y = 0; y < height; y++) {
                 for (let x = 0; x < width; x++) {
                   const pos = (y * width + x) * 4
-                  data[pos + 3] = 255 - data[pos + 0]
-                  data[pos + 0] = r
-                  data[pos + 1] = g
-                  data[pos + 2] = b
+                  data[pos + 3] = 255 - (data[pos + 0] + data[pos + 1] + data[pos + 2]) / 3
                 }
               }
+
+              el.classList.add('background')
+              el.style.setProperty('color', '#00000000', 'important')
+              await nextFrame()
+              const background = await createImageBitmap(await html2canvas(el))
+              el.classList.remove('background')
+              el.style.removeProperty('color')
+
+              ctx.reset()
               ctx.putImageData(image, 0, 0)
+              ctx.globalCompositeOperation = 'source-in'
+              ctx.drawImage(background, 0, 0)
 
               const blob = await new Promise(ok => {
                 canvas.toBlob(ok, 'image/png')
@@ -191,7 +202,7 @@ color: #000;
               for (const node of [...vm.$refs.texts.childNodes]) {
                 node.remove()
               }
-              await delay(10)
+              await nextFrame()
               vm.file = await vm.handleInner()
               vm.log = ''
             } catch (error) {
@@ -203,78 +214,61 @@ color: #000;
           }
         },
         render() {
-          const vm = this, { _c, _v, _e, progress } = vm
+          const vm = this, { _c: h, _v, _e, progress } = vm
           const disabled = progress != null
-          return _c('div', { staticClass: "container", attrs: { id: "app" } }, [
-            _c('div', {
+          return h('div', { staticClass: "container", attrs: { id: "app" } }, [
+            h('div', {
               staticStyle: { margin: '60px auto 30px auto', 'text-align': 'center' }
             }, [
-              _c('h2', [_v('\u3000')])
+              h('h2', [_v('\u3000')])
             ]),
-            _c(Row, { attrs: { gutter: 6 } }, [
-              _c(Col, { attrs: { span: 12 } }, [
-                _c(Row, null, [
-                  _c(Col, {
+            h(Row, { attrs: { gutter: 6 } }, [
+              h(Col, { attrs: { span: 12 } }, [
+                h(Row, null, [
+                  h(Col, {
                     attrs: { span: 2 },
                     staticStyle: { 'text-align': 'right', 'line-height': '30px' }
                   }, [_v('歌词：')]),
-                  _c(Col, { attrs: { span: 22 } }, [
-                    _c(Input, {
+                  h(Col, { attrs: { span: 22 } }, [
+                    h(Input, {
                       ref: 'lyrics',
                       attrs: { type: 'textarea', autosize: true, disabled }
                     })
                   ])
                 ]),
-                _c(Row, { staticStyle: { margin: '16px 0 0 0' } }, [
-                  _c(Col, {
+                h(Row, { staticStyle: { margin: '16px 0 0 0' } }, [
+                  h(Col, {
                     attrs: { span: 2 },
                     staticStyle: { 'text-align': 'right', 'line-height': '30px' }
                   }, [_v('Style：')]),
-                  _c(Col, { attrs: { span: 22 } }, [
-                    _c(Input, {
+                  h(Col, { attrs: { span: 22 } }, [
+                    h(Input, {
                       ref: 'style',
                       attrs: { type: 'textarea', autosize: true, disabled }
                     })
                   ])
                 ]),
-                _c(Row, { staticStyle: { margin: '16px 0 0 0' } }, [
-                  _c(Col, {
-                    attrs: { span: 2 },
-                    staticStyle: { 'text-align': 'right', 'line-height': '30px' }
-                  }, [_v('Color：')]),
-                  _c(Col, { attrs: { span: 22 } }, [
-                    _c(Input, {
-                      ref: 'color',
-                      attrs: { type: 'text', disabled }
-                    })
-                  ])
-                ]),
-                _c(Row, { staticStyle: { margin: '16px 0 0 0' } }, [
-                  _c(Col, {
-                    attrs: { span: 2 },
-                    staticStyle: { 'text-align': 'right', 'line-height': '30px' }
-                  }, [_v(`${vm.log}\u3000`)]),
-                  _c(Col, { attrs: { span: 22 } }, [
-                    _c(Button, {
+                h(Row, { staticStyle: { margin: '16px 0 0 0' } }, [
+                  h(Col, { attrs: { span: 22, offset: 2 } }, [
+                    h(Button, {
+                      style: progress === 'handle' ? { 'margin-left': '-18px' } : null,
                       attrs: { disabled, loading: progress === 'handle' },
                       on: { click: vm.handle }
-                    }, [_v("启动")])
-                  ])
-                ]),
-                _c(Row, { staticStyle: { margin: '16px 0 0 0' } }, [
-                  _c(Col, { attrs: { offset: 2, span: 22 } }, [
+                    }, [_v("启动")]),
                     vm.fileURL != null
-                      ? _c('a', { attrs: { href: vm.fileURL, download: vm.file.name } }, [_v(vm.fileURL)])
-                      : _e('')
+                      ? h('a', {
+                        staticClass: 'ivu-btn ivu-btn-default',
+                        staticStyle: { 'margin-left': '12px' },
+                        attrs: { href: vm.fileURL, download: vm.file.name }
+                      }, [h('span', null, [_v('下载')])])
+                      : h('span', {
+                        staticStyle: { 'margin-left': '12px', 'line-height': '1.5' }
+                      }, [_v(vm.log)])
                   ])
                 ])
               ]),
-              _c(Col, { attrs: { span: 12 } }, [
-                _c('div', {
-                  ref: 'texts', staticStyle: {
-                    all: 'initial', width: '1920px', display: 'inline-block'
-                  }
-                })
+              h(Col, { attrs: { span: 12 } }, [
+                h('div', { ref: 'texts', staticClass: 'text-container' })
               ])
             ])
           ])
@@ -291,11 +285,20 @@ color: #000;
       def(_vm, 'lyrics')
       def(_vm, 'style')
       def(_vm, 'color')
-      _vm.$mount('#app')
+      ready.then(e => { _vm.$mount('#app') })
       Object.assign(window, { _vm })
+
+      const colors = Array.from({ length: 271 }, (_, i) => {
+        return `hsl(${i}deg 100% 50%) ${(i / 270) * 55 + 25}%`
+      }).join(',\n')
+      const $style = document.createElement('style')
+      $style.textContent = `\
+.text-container {
+--rainbow-horizontal: linear-gradient(.25turn,\n${colors}\n);
+--rainbow-vertical: linear-gradient(.5turn,\n${colors}\n);
+}`
+      document.body.append($style)
     })
-
-
   </script>
 </body>
 
