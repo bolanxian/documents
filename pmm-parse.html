@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PolygonMovieMaker(.pmm) Parse</title>
+  <meta name="author" content="僠儖僲">
+  <link rel="author" href="https://space.bilibili.com/517723/">
+  <link rel="stylesheet" href="https://unpkg.com/view-ui-plus@1.3.21/dist/styles/viewuiplus.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "vue": "https://unpkg.com/vue@3.5.22/dist/vue.runtime.esm-browser.js",
+        "iview": "https://unpkg.com/view-ui-plus@1.3.21/dist/viewuiplus.min.esm.js"
+      }
+    }
+  </script>
+  <script type="module">
+    /**
+     * @createDate 2025-10-14
+     */
+    import { createApp, shallowReactive, createVNode as h, onMounted } from 'vue'
+    import { Row, Col, Alert, Card, CellGroup, Cell } from 'iview'
+
+    const decoder = new TextDecoder('sjis')
+    /**
+     * https://github.com/Inwerwm/MikuMikuMethods/blob/master/MikuMikuMethods/Pmm/IO/PmmFileReader.cs
+     */
+    const parse = (_buffer) => {
+      const readString = () => {
+        const length = view.getUint8(ptr, true); ptr += 1
+        const sub = new Uint8Array(_buffer, ptr, length); ptr += length
+        return decoder.decode(sub)
+      }
+      const readStringNul = (length) => {
+        const sub = new Uint8Array(_buffer, ptr, length); ptr += length
+        const index = sub.indexOf(0)
+        return decoder.decode(index >= 0 ? sub.subarray(0, index) : sub)
+      }
+      const pmm = { __proto__: null }; let ptr = 0
+      pmm.version = readStringNul(30)
+      if (pmm.version != "Polygon Movie maker 0002") throw new TypeError("This is not PMM file.")
+      const view = new DataView(_buffer)
+      pmm.outputResolutionWidth = view.getInt32(30, true)
+      pmm.outputResolutionHeight = view.getInt32(34, true)
+      pmm.editorStateWidth = view.getInt32(38, true)
+      pmm.cameraCurrentViewAngle = view.getFloat32(42, true)
+      pmm.editorStateIsCameraMode = view.getUint8(46, true)
+
+      pmm.selectedModelIndex = view.getUint8(53, true)
+      pmm.modelCount = view.getUint8(54, true)
+      pmm.modelList = []
+
+      ptr = 55
+      for (let i = 0; i < pmm.modelCount; i++) {
+        const id = view.getUint8(ptr, true); ptr += 1
+        const name = readString()
+        const nameEn = readString()
+        const path = readStringNul(256)
+        ptr += 1
+        const boneList = [], boneCount = view.getInt32(ptr, true); ptr += 4
+        for (let i = 0; i < boneCount; i++) {
+          boneList[i] = readString()
+        }
+        const morphList = [], morphCount = view.getInt32(ptr, true); ptr += 4
+        for (let i = 0; i < morphCount; i++) {
+          morphList[i] = readString()
+        }
+        const ikIndices = [], ikCount = view.getInt32(ptr, true); ptr += 4
+        for (let i = 0; i < ikCount; i++) {
+          ikIndices[i] = view.getInt32(ptr, true); ptr += 4
+        }
+        const parentableIndices = [], parentableBoneCount = view.getInt32(ptr, true); ptr += 4
+        for (let i = 0; i < parentableBoneCount; i++) {
+          parentableIndices[i] = view.getInt32(ptr, true); ptr += 4
+        }
+        const renderOrder = view.getUint8(ptr, true); ptr += 1
+        const visible = view.getUint8(ptr, true) != 0; ptr += 1
+        ptr += 4 * 5
+        const nodeCount = view.getUint8(ptr, true); ptr += 1
+        ptr += 1 * nodeCount
+        ptr += 4 * 2//SpecificEditorState
+        InitialBoneFrame: for (let i = 0; i < boneCount; i++) {
+          ptr += 4 * 3
+          ptr += 4 * 4//InterpolationCurves
+          ptr += 4 * 3//Movement
+          ptr += 4 * 4//Rotation
+          ptr += 1 * 2
+        }
+        let elementFrameCount = view.getInt32(ptr, true); ptr += 4
+        BoneFrame: for (let i = 0; i < elementFrameCount; i++) {
+          ptr += 4 * 4
+          ptr += 4 * 4//InterpolationCurves
+          ptr += 4 * 3//Movement
+          ptr += 4 * 4//Rotation
+          ptr += 1 * 2
+        }
+        InitialMorphFrame: for (let i = 0; i < morphCount; i++) {
+          ptr += 4 * 4
+          ptr += 1
+        }
+        elementFrameCount = view.getInt32(ptr, true); ptr += 4
+        MorphFrame: for (let i = 0; i < elementFrameCount; i++) {
+          ptr += 4 * 5
+          ptr += 1
+        }
+        InitialConfigFrame: {
+          ptr += 4 * 3
+          ptr += 1
+          ptr += 1 * ikCount
+          ptr += 4 * 2 * parentableBoneCount
+          ptr += 1
+        }
+        const configFrameCount = view.getInt32(ptr, true); ptr += 4
+        ConfigFrame: for (let i = 0; i < configFrameCount; i++) {
+          ptr += 4 * 4
+          ptr += 1
+          ptr += 1 * ikCount
+          ptr += 4 * 2 * parentableBoneCount
+          ptr += 1
+        }
+        CurrentBone: for (let i = 0; i < boneCount; i++) {
+          ptr += 4 * 3
+          ptr += 4 * 4
+          ptr += 1 * 3
+        }
+        CurrentMorph: ptr += 4 * morphCount
+        CurrentConfig: ptr += 1 * ikCount
+        OutsideParentState: for (let i = 0; i < parentableBoneCount; i++) {
+          ptr += 4 * 4
+        }
+        //DrawInfo
+        const enableAlphaBlend = view.getUint8(ptr, true) != 0; ptr += 1
+        const edgeWidth = view.getFloat32(ptr, true); ptr += 4
+        const enableSelfShadow = view.getUint8(ptr, true) != 0; ptr += 1
+        const calculateOrder = view.getUint8(ptr, true); ptr += 1
+        pmm.modelList[i] = {
+          id, name, nameEn, path, boneList, morphList,
+          ikIndices, parentableIndices,
+          renderOrder, visible,
+          enableAlphaBlend, edgeWidth, enableSelfShadow,
+          calculateOrder
+        }
+      }
+      return pmm
+    }
+
+    createApp({
+      setup(props, ctx) {
+        onMounted(() => {
+          document.addEventListener('dragover', (e) => {
+            e.preventDefault()
+          })
+          document.addEventListener('drop', (e) => {
+            e.preventDefault()
+            if (e.dataTransfer == null) { return }
+            const [file] = e.dataTransfer.files
+            handleFile(file)
+          })
+        })
+        const data = shallowReactive({
+          error: null,
+          name: null,
+          pmm: null,
+        })
+        const handleFile = async (file) => {
+          try {
+            data.error = data.name = data.pmm = null
+            const head = decoder.decode(await file.slice(0, 30).arrayBuffer())
+            if (!head.startsWith("Polygon Movie maker 0002\0")) {
+              throw new TypeError("This is not PMM file.")
+            }
+            data.pmm = parse(await file.arrayBuffer())
+            data.name = file.name
+            console.log(data.pmm)
+          } catch (e) {
+            data.error = e
+            throw e
+          }
+        }
+
+        const $colAttrs0 = { xs: 24, sm: { span: 20, offset: 2 }, md: { span: 16, offset: 4 }, lg: { span: 12, offset: 6 } }
+        return () => [
+          h('div', { style: 'margin:60px auto 40px auto;text-align:center' }, [
+            h('h2', null, ['PolygonMovieMaker(.pmm) Parse'])
+          ]),
+          h(Row, { gutter: 8 }, () => [
+            h(Col, $colAttrs0, () => [
+              data.error != null ? h(Alert, { type: 'error' }, () => [data.error.message]) : null,
+              data.pmm != null ? h(Card, {
+                title: `[${data.pmm.outputResolutionWidth}x${data.pmm.outputResolutionHeight}]${data.name}`
+              }, () => [
+                h(CellGroup, {}, () => Array.from(data.pmm.modelList, model => h(Cell, {
+                  title: model.name, label: model.path,
+                  selected: model.id === data.pmm.selectedModelIndex
+                })))
+              ]) : null
+            ])
+          ])
+        ]
+      }
+    }).mount('#app')
+  </script>
+</head>
+
+<body>
+  <div id="app" style="padding:0 4px"></div>
+</body>
+
+</html>
