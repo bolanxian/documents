@@ -22,8 +22,17 @@
      */
     import { createApp, shallowReactive, createVNode as h, onMounted } from 'vue'
     import { Row, Col, Alert, Card, CellGroup, Cell } from 'iview'
-
-    const decoder = new TextDecoder('sjis')
+    const chr = String.fromCodePoint
+    const sjis = new TextDecoder('sjis')
+    const gbk = new TextDecoder('gbk')
+    class SjisString extends String {
+      #gbk
+      get gbk() { return this.#gbk }
+      constructor(buffer) {
+        super(sjis.decode(buffer))
+        this.#gbk = gbk.decode(buffer)
+      }
+    }
     /**
      * https://github.com/Inwerwm/MikuMikuMethods/blob/master/MikuMikuMethods/Pmm/IO/PmmFileReader.cs
      */
@@ -31,12 +40,12 @@
       const readString = () => {
         const length = view.getUint8(ptr, true); ptr += 1
         const sub = new Uint8Array(_buffer, ptr, length); ptr += length
-        return decoder.decode(sub)
+        return new SjisString(sub)
       }
       const readStringNul = (length) => {
         const sub = new Uint8Array(_buffer, ptr, length); ptr += length
         const index = sub.indexOf(0)
-        return decoder.decode(index >= 0 ? sub.subarray(0, index) : sub)
+        return new SjisString(index >= 0 ? sub.subarray(0, index) : sub)
       }
       const pmm = { __proto__: null }; let ptr = 0
       pmm.version = readStringNul(30)
@@ -154,6 +163,7 @@
           })
           document.addEventListener('drop', (e) => {
             e.preventDefault()
+            if (data.loading) { return }
             if (e.dataTransfer == null) { return }
             const [file] = e.dataTransfer.files
             handleFile(file)
@@ -161,22 +171,34 @@
         })
         const data = shallowReactive({
           error: null,
+          loading: false,
           name: null,
           pmm: null,
+          pathList: null,
         })
         const handleFile = async (file) => {
           try {
-            data.error = data.name = data.pmm = null
-            const head = decoder.decode(await file.slice(0, 30).arrayBuffer())
+            data.loading = true
+            data.error = data.name = data.pmm = data.pathList = null
+            const head = sjis.decode(await file.slice(0, 30).arrayBuffer())
             if (!head.startsWith("Polygon Movie maker 0002\0")) {
               throw new TypeError("This is not PMM file.")
             }
-            data.pmm = parse(await file.arrayBuffer())
+            const _buffer = await file.arrayBuffer()
+            data.pmm = parse(_buffer)
             data.name = file.name
-            console.log(data.pmm)
+            await new Promise(ok => { setTimeout(ok, 0) })
+            const pathList = data.pathList = [], buffer = new Uint8Array(_buffer)
+            let str = ''; for (const $ of buffer) { str += chr($) }
+            for (const m of str.matchAll(/[A-Za-z]:[^\x00-\x1F]+?\.[A-Za-z]{1,4}(?=\0)/g)) {
+              const buf = new Uint8Array(_buffer, m.index, m[0].length)
+              pathList[pathList.length] = new SjisString(buf)
+            }
           } catch (e) {
             data.error = e
-            throw e
+          } finally {
+            data.loading = false
+            console.log({ ...data })
           }
         }
 
@@ -189,13 +211,27 @@
             h(Col, $colAttrs0, () => [
               data.error != null ? h(Alert, { type: 'error' }, () => [data.error.message]) : null,
               data.pmm != null ? h(Card, {
-                title: `[${data.pmm.outputResolutionWidth}x${data.pmm.outputResolutionHeight}]${data.name}`
+                title: `[${data.pmm.outputResolutionWidth}\xD7${data.pmm.outputResolutionHeight}]${data.name}`
               }, () => [
                 h(CellGroup, {}, () => Array.from(data.pmm.modelList, model => h(Cell, {
-                  title: model.name, label: model.path,
                   selected: model.id === data.pmm.selectedModelIndex
+                }, {
+                  default: () => [
+                    `${model.name}\u3000${model.nameEn}`, h('br'),
+                    `${model.name.gbk}\u3000${model.nameEn.gbk}`,
+                  ],
+                  label: () => [
+                    `${model.path}`, h('br'),
+                    `${model.path.gbk}`,
+                  ],
                 })))
-              ]) : null
+              ]) : null,
+              data.pathList != null ? h(Card, { title: 'Path', style: 'margin-top:8px' }, () => [
+                h(CellGroup, {}, () => Array.from(data.pathList, path => h(Cell, {
+                  title: `${path}`, label: path.gbk
+                })))
+              ]) : null,
+              data.loading ? h(Alert, { style: 'margin-top:8px' }, () => ['加载中']) : null,
             ])
           ])
         ]
