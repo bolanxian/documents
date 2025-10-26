@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>抽参套参检查</title>
+  <link rel="author" href="https://space.bilibili.com/517723/" title="僠儖僲">
+  <link rel="author" href="https://space.bilibili.com/12131593/" title="尊贵的阿昆达">
+  <link rel="stylesheet" href="https://unpkg.com/view-ui-plus@1.3.21/dist/styles/viewuiplus.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "vue": "https://unpkg.com/vue@3.5.22/dist/vue.runtime.esm-browser.js",
+        "iview": "https://unpkg.com/view-ui-plus@1.3.21/dist/viewuiplus.min.esm.js"
+      }
+    }
+  </script>
+  <script type="text/plain" data-author="尊贵的阿昆达" data-from="av114976777836578">
+function getClientInfo() {
+  return {
+    "name" : "2.1.1抽参套参检查",
+    "category" : "AKD套参检查",
+    "author" : "akd",
+    "versionNumber" : 1,
+    "minEditorVersion" : 131328
+  };
+}
+
+function main() {
+  var selectedGroup=SV.getArrangement().getSelection().getSelectedGroups()
+  if(selectedGroup.length!=2){SV.showMessageBox("选择音符组数目错误", "请在“编曲”框中选择两个音符组");SV.finish()}
+//     PitchPointConnect(selectedGroup[0]);PitchPointConnect(selectedGroup[1]);
+//   selectedGroup[0].setTimeRange(0, selectedGroup[0].getOnset()+selectedGroup[0].getDuration());
+//   selectedGroup[1].setTimeRange(0, selectedGroup[1].getOnset()+selectedGroup[1].getDuration()); 
+// SV.showMessageBox("请等待一段时间","待白色实际音高线出现后手动点击确认，过程大概需要5-10秒");
+        var numFrames=SV.getProject().getDuration()/(SV.QUARTER/32)
+  var Array0=SV.getComputedPitchForGroup(selectedGroup[0], 0, SV.QUARTER/32, numFrames)
+    var Array1=SV.getComputedPitchForGroup(selectedGroup[1], 0, SV.QUARTER/32, numFrames)
+    analyzeSequences()
+        // 计算分位数
+        function quantile(arr, q) {
+            var filtered = arr.filter(function(v) { return v !== null; });
+            if (filtered.length === 0) return null;
+            
+            filtered.sort(function(a, b) { return a - b; });
+            var pos = (filtered.length - 1) * q;
+            var base = Math.floor(pos);
+            var rest = pos - base;
+            
+            if (filtered[base + 1] !== undefined) {
+                return filtered[base] + rest * (filtered[base + 1] - filtered[base]);
+            } else {
+                return filtered[base];
+            }
+        }
+        
+        // 计算直方图
+        function histogram(arr, bins) {
+            var filtered = arr.filter(function(v) { return v !== null; });
+            if (filtered.length === 0) return { hist: [], min: 0, max: 0 };
+            
+            var min = Math.min.apply(null, filtered);
+            var max = Math.max.apply(null, filtered);
+            if (min === max) max = min + 1; // 防止除零错误
+            
+            var step = (max - min) / bins;
+            // SV.print(JSON.stringify(bins))
+            var hist = new Array(bins);
+            for (var i = 0; i < bins; i++) {
+               hist[i] = 0;
+            }
+            // var hist = new Array(bins).fill(0);
+            
+            for (var i = 0; i < filtered.length; i++) {
+                var binIndex = Math.min(Math.floor((filtered[i] - min) / step), bins - 1);
+                hist[binIndex]++;
+            }
+            
+            // 归一化
+            var total = filtered.length;
+            for (var j = 0; j < hist.length; j++) {
+                hist[j] = hist[j] / total;
+            }
+            
+            return { hist: hist, min: min, max: max };
+        }
+        
+        // 计算KL散度
+        function klDivergence(hist1, hist2) {
+            if (hist1.length !== hist2.length) return Infinity;
+            
+            var sum = 0;
+            var epsilon = 1e-10; // 避免除以0
+            
+            for (var i = 0; i < hist1.length; i++) {
+                var p = hist1[i] + epsilon;
+                var q = hist2[i] + epsilon;
+                sum += p * Math.log(p / q);
+            }
+            
+            return sum;
+        }
+        
+        // 增强的偏移检测算法
+        function findBestOffset(seq1, seq2, maxOffset) {
+            var bestOffset = 0;
+            var bestScore = -Infinity; // 使用相关系数，越大越好
+            
+            // 获取有效数据索引
+            var validIndices1 = [];
+            var validIndices2 = [];
+            
+            for (var i = 0; i < seq1.length; i++) {
+                if (seq1[i] !== null) validIndices1.push(i);
+                if (seq2[i] !== null) validIndices2.push(i);
+            }
+            
+            // 如果有效数据太少，返回0
+            if (validIndices1.length < 5 || validIndices2.length < 5) {
+                return 0;
+            }
+            
+            // 尝试所有可能的偏移量（-maxOffset到+maxOffset）
+            for (var offset = -maxOffset; offset <= maxOffset; offset++) {
+                var sum1 = 0, sum2 = 0, sum12 = 0;
+                var sum1Sq = 0, sum2Sq = 0;
+                var count = 0;
+                
+                for (var i = 0; i < validIndices1.length; i++) {
+                    var idx1 = validIndices1[i];
+                    var idx2 = idx1 + offset;
+                    
+                    // 检查索引是否有效
+                    if (idx2 >= 0 && idx2 < seq2.length && seq2[idx2] !== null) {
+                        var val1 = seq1[idx1];
+                        var val2 = seq2[idx2];
+                        
+                        sum1 += val1;
+                        sum2 += val2;
+                        sum12 += val1 * val2;
+                        sum1Sq += val1 * val1;
+                        sum2Sq += val2 * val2;
+                        count++;
+                    }
+                }
+                
+                // 计算相关系数
+                if (count > 1) {
+                    var numerator = count * sum12 - sum1 * sum2;
+                    var denominator = Math.sqrt((count * sum1Sq - sum1 * sum1) * 
+                                               (count * sum2Sq - sum2 * sum2));
+                    
+                    var corr = denominator !== 0 ? numerator / denominator : 0;
+                    
+                    // 考虑匹配点数作为权重
+                    var weightedScore = corr * Math.sqrt(count);
+                    
+                    if (weightedScore > bestScore) {
+                        bestScore = weightedScore;
+                        bestOffset = offset;
+                    }
+                }
+            }
+            
+            return bestOffset;
+        }
+        
+        // 应用偏移校正
+        function applyOffsetCorrection(seq1, seq2, offset) {
+            var alignedSeq1 = [];
+            var alignedSeq2 = [];
+            
+            for (var i = 0; i < seq1.length; i++) {
+                var j = i + offset;
+                if (j >= 0 && j < seq1.length && 
+                    seq1[i] !== null && seq2[j] !== null) {
+                    alignedSeq1.push(seq1[i]);
+                    alignedSeq2.push(seq2[j]);
+                }
+            }
+            
+            return { seq1: alignedSeq1, seq2: alignedSeq2 };
+        }
+        
+        // 偏差分布统计函数
+        function calculateDeviationDistribution(alignedSeq1, alignedSeq2) {
+            // 定义偏差区间（带符号）
+            var intervals = [
+                {min: -Infinity, max: -0.5, label: "≤ -0.5"},
+                {min: -0.5, max: -0.4, label: "-0.5 ~ -0.4"},
+                {min: -0.4, max: -0.3, label: "-0.4 ~ -0.3"},
+                {min: -0.3, max: -0.2, label: "-0.3 ~ -0.2"},
+                {min: -0.2, max: -0.1, label: "-0.2 ~ -0.1"},
+                {min: -0.1, max: 0.1, label: "-0.1 ~ 0.1"},
+                {min: 0.1, max: 0.2, label: "0.1 ~ 0.2"},
+                {min: 0.2, max: 0.3, label: "0.2 ~ 0.3"},
+                {min: 0.3, max: 0.4, label: "0.3 ~ 0.4"},
+                {min: 0.4, max: 0.5, label: "0.4 ~ 0.5"},
+                {min: 0.5, max: Infinity, label: "≥ 0.5"}
+            ];
+            
+            // 初始化统计数组
+            // var distribution = new Array(intervals.length).fill(0);
+            var distribution = new Array(intervals.length);
+            for (var i = 0; i < intervals.length; i++) {
+               distribution[i] = 0;
+            }
+            var totalPoints = 0;
+            var deviations = [];
+            
+            // 计算所有偏差值
+            for (var i = 0; i < alignedSeq1.length; i++) {
+                var diff = alignedSeq2[i] - alignedSeq1[i]; // seq2 - seq1 带符号
+                deviations.push(diff);
+                
+                // 统计到对应区间
+                for (var j = 0; j < intervals.length; j++) {
+                    if (diff >= intervals[j].min && diff < intervals[j].max) {
+                        distribution[j]++;
+                        totalPoints++;
+                        break;
+                    }
+                }
+            }
+            
+            // 计算百分比
+            var percentages = distribution.map(function(count) {
+                return totalPoints > 0 ? (count / totalPoints * 100).toFixed(1): 0;
+            });
+            
+            // 获取区间标签
+            var labels = intervals.map(function(interval) {
+                return interval.label;
+            });
+            
+            return {
+                distribution: distribution,
+                percentages: percentages,
+                labels: labels,
+                deviations: deviations,
+                totalPoints: totalPoints
+            };
+        }
+        
+        // 鲁棒相似性分析
+        function robustSimilarity(alignedSeq1, alignedSeq2) {
+            // 1. 计算分位数特征
+            var quantiles = [0.1, 0.25, 0.5, 0.75, 0.9];
+            var features1 = quantiles.map(function(q) { return quantile(alignedSeq1, q); });
+            var features2 = quantiles.map(function(q) { return quantile(alignedSeq2, q); });
+            
+            // 2. 计算能量距离
+            var energyDist = 0;
+            var validFeatures = 0;
+            for (var i = 0; i < features1.length; i++) {
+                if (features1[i] !== null && features2[i] !== null) {
+                    energyDist += Math.pow(features1[i] - features2[i], 2);
+                    validFeatures++;
+                }
+            }
+            energyDist = validFeatures > 0 ? Math.sqrt(energyDist / validFeatures) : 0;
+            
+            // 3. 计算KL散度
+            var bins = Math.max(5, Math.min(15, Math.floor(Math.sqrt(alignedSeq1.length)))); // 自适应分箱
+            var hist1 = histogram(alignedSeq1, bins).hist;
+            var hist2 = histogram(alignedSeq2, bins).hist;
+            var klDiv = klDivergence(hist1, hist2);
+            
+            // 4. 计算相关系数
+            var sum1 = 0, sum2 = 0, sum12 = 0, sum1Sq = 0, sum2Sq = 0, n = alignedSeq1.length;
+            for (var j = 0; j < n; j++) {
+                sum1 += alignedSeq1[j];
+                sum2 += alignedSeq2[j];
+                sum12 += alignedSeq1[j] * alignedSeq2[j];
+                sum1Sq += alignedSeq1[j] * alignedSeq1[j];
+                sum2Sq += alignedSeq2[j] * alignedSeq2[j];
+            }
+            
+            var numerator = n * sum12 - sum1 * sum2;
+            var denominator = Math.sqrt((n * sum1Sq - sum1 * sum1) * (n * sum2Sq - sum2 * sum2));
+            var correlation = denominator !== 0 ? numerator / denominator : 0;
+            
+            // 5. 综合相似度评分
+            var similarityScore = Math.exp(-0.5 * energyDist) * 
+                                 (1 - Math.min(klDiv, 1)) * 
+                                 ((correlation + 1) / 2);
+            
+            return {
+                features1: features1,
+                features2: features2,
+                energyDist: energyDist,
+                klDiv: klDiv,
+                correlation: correlation,
+                similarityScore: similarityScore
+            };
+        }
+        
+        // 分析序列
+        function analyzeSequences() {
+            // 解析输入
+            var seq1 = Array0;
+            var seq2 = Array1;
+            SV.print(0)
+            // 检测并校正索引偏移（最大16位）
+            var maxOffset = 16;
+            var bestOffset = findBestOffset(seq1, seq2, maxOffset);
+            var aligned = applyOffsetCorrection(seq1, seq2, bestOffset);
+                        SV.print(1)
+            // 鲁棒相似性分析
+            var analysis = robustSimilarity(aligned.seq1, aligned.seq2);
+                        SV.print(2)
+            // 偏差分布统计
+            var deviationStats = calculateDeviationDistribution(aligned.seq1, aligned.seq2);
+                        SV.print(3)
+            var pitchDeviationStats=""
+            for(i=0;i<11;i++){
+              pitchDeviationStats+=deviationStats.labels[i]+Heikuai(deviationStats.percentages[i])+deviationStats.percentages[i]+"%\n"
+            }
+            SV.print(4)
+            SV.showMessageBox("音高分布情况","音高分布情况代表了音高相似的比例，分布越靠近中间，套参可能性越高\n"+pitchDeviationStats)
+                        var isSimilar = analysis.similarityScore > 0.4;
+            var similarityClass = isSimilar ? '可能是' : '可能不是';
+            SV.showMessageBox("统计数据","可能的位置偏移："+bestOffset+"个128分音符\n有效数据："+aligned.seq1.length+"\n能量距离（越小可能性越大）："+analysis.energyDist.toFixed(4)+"\nKL散度（越小越有可能）："+analysis.klDiv.toFixed(4)+"\n相关系数（越大越有可能）："+analysis.correlation.toFixed(4)+"\n综合查重率（建议参考值大于0.4为可能是）："+analysis.similarityScore.toFixed(4)+"\n结论"+similarityClass)
+            // // 显示结果
+            // displayResults(aligned, bestOffset, analysis, deviationStats);
+            
+            // // 绘制图表
+            // drawChart(aligned.seq1, aligned.seq2);
+            // drawDeviationChart(deviationStats);
+        }
+        
+
+
+//       var groupReference=SV.getMainEditor().getCurrentGroup();
+//       groupReference.setTimeRange(0, groupReference.getOnset()+groupReference.getDuration())
+//       var numFrames=SV.getProject().getDuration()/(SV.QUARTER/8)
+// var a=SV.getComputedPitchForGroup(groupReference, 0, SV.QUARTER/8, numFrames)
+// SV.setHostClipboard(JSON.stringify(a))
+  SV.finish();
+}
+
+
+
+function PitchPointConnect(groupReference) {
+    var group=groupReference.getTarget();
+
+            var selection=SV.getMainEditor().getSelection();
+                    var selectednote =selection.getSelectedNotes();
+var j=0
+var Duration=[]
+if(selection.hasSelectedNotes()==false){
+  
+      var selectednote =[];for(i=0;i<group.getNumNotes()-2;i++){SV.print(group.getNumNotes());selectednote[i]=group.getNote(i);SV.print(i);}
+}
+      var onset=selectednote[0].getOnset()
+    for(var i=0;i<selectednote.length;i++){
+      
+      var end=selectednote[i].getEnd()
+      if(i<selectednote.length-1){if(selectednote[i+1].getOnset()!=selectednote[i].getEnd()){
+        Duration[j]=[onset,end];j++;onset=selectednote[i+1].getOnset()
+      }}else{Duration[j]=[onset,end]}
+    }
+    // 88200000
+    // SV.showMessageBox(1,JSON.stringify(Duration))
+
+    for(var k=0;k<Duration.length;k++){
+          var point=[]
+      for(var l=group.getNumPitchControls()-1;l>=0;l--){
+        if(group.getPitchControl(l).type=="PitchControlPoint"){if(group.getPitchControl(l).getPosition()>Duration[k][0]-88200000&&group.getPitchControl(l).getPosition()<Duration[k][1]+88200000){point.push([group.getPitchControl(l).getPosition(),group.getPitchControl(l).getPitch()]);group.removePitchControl(l)}}
+      }
+      if(point.length>1){
+        for(var m=1;m<point.length;m++){
+            var b=SV.create("PitchControlCurve")
+      b.setPosition(point[m-1][0]);
+      b.setPitch(point[m-1][1])
+
+      var points=mixedInterpolation([0,0],[point[m][0]-point[m-1][0],point[m][1]-point[m-1][1]],20)
+      b.setPoints(points)
+            group.addPitchControl(b)
+        }
+
+      }else if(point.length==1){
+        var b=SV.create("PitchControlPoint")
+      b.setPosition(point[0][0]);
+      b.setPitch(point[0][1])
+            group.addPitchControl(b)
+      }
+    }
+  SV.finish();
+}
+/**
+ * 混合插值函数：x坐标线性插值，y坐标余弦插值
+ * @param {number[]} point1 - 起点坐标 [x1, y1]
+ * @param {number[]} point2 - 终点坐标 [x2, y2]
+ * @param {number} numPoints - 生成的插值点数量（包含起点和终点）
+ * @returns {number[][]} 插值后的坐标数组
+ */
+function mixedInterpolation(point1, point2, numPoints) {
+
+  
+  // 提取坐标值
+  var x1 = point1[0], y1 = point1[1];
+  var x2 = point2[0], y2 = point2[1];
+  
+  // 验证坐标值
+  if ([x1, y1, x2, y2].some(isNaN)) {
+    throw new Error("坐标值包含非数字");
+  }
+  
+  var result = [];
+  
+  for (var i = 0; i < numPoints; i++) {
+    // 计算当前插值比例 (0.0 ~ 1.0)
+    var t = i / (numPoints - 1);
+    
+    // X坐标：线性插值
+    var x = x1 + (x2 - x1) * t;
+    
+    // Y坐标：余弦插值（平滑缓动）
+    var weight = (1 - Math.cos(t * Math.PI)) / 2;
+    var y = y1 + (y2 - y1) * weight;
+    
+    result.push([x, y]);
+  }
+  
+  return result;
+}
+
+function Heikuai(percentage){
+  var a=parseInt((Number(percentage)/10).toFixed(0))
+  var b=""
+  for(var i=0;i<=a*5-1;i++){b+="■"}
+  return b
+}
+  </script>
+  <script type="module">
+    /**
+     * @createDate 2025-10-26
+     */
+    import { createApp, shallowReactive, createVNode as h, onMounted } from 'vue'
+    import { Row, Col, Alert, Card, CellGroup, Cell } from 'iview'
+    const Inner = Function('SV', `\
+var _Heikuai=Heikuai
+Heikuai=function(per){
+  return ' '+_Heikuai(per)+' '
+}
+return main()
+${document.querySelector('[data-from=av114976777836578]').textContent}
+`)
+    const SV = {
+      _data: null,
+      QUARTER: 0,
+      arrangement: {
+        selection: { getSelectedGroups() { return SV._data.f0List } },
+        getSelection() { return this.selection }
+      },
+      getArrangement() { return this.arrangement },
+      project: { getDuration: () => 0 },
+      getProject() { return this.project },
+      getComputedPitchForGroup(arg0) { return arg0 },
+      print(n) { },
+      showMessageBox(title, content) {
+        SV._data.resultList.push({ title, content })
+      },
+      finish() { }
+    }
+
+    createApp({
+      setup(props, ctx) {
+        onMounted(() => {
+          document.addEventListener('dragover', (e) => {
+            e.preventDefault()
+          })
+          document.addEventListener('drop', (e) => {
+            e.preventDefault()
+            if (data.loading) { return }
+            if (e.dataTransfer == null) { return }
+            handleFile(e.dataTransfer.files)
+          })
+        })
+        const data = shallowReactive({
+          error: null,
+          loading: false,
+          files: null,
+          f0List: null,
+          resultList: null,
+        })
+        const handleFile = async (files) => {
+          try {
+            data.loading = true
+            SV._data = data
+            data.error = data.files = data.f0List = null
+            data.resultList = []
+            data.f0List = await Promise.all(Array.from(data.files = files, async (file) => {
+              const data = new Float64Array(await file.arrayBuffer())
+              return Array.from(data, i => i > 0 ? i : null)
+            }))
+            Inner(SV)
+          } catch (e) {
+            data.error = e
+          } finally {
+            data.loading = false
+            console.log({ ...data })
+          }
+        }
+
+        const $colAttrs0 = { xs: 24, sm: { span: 20, offset: 2 }, md: { span: 16, offset: 4 }, lg: { span: 12, offset: 6 } }
+        return () => [
+          h('div', { style: 'margin:60px auto 40px auto;text-align:center' }, [
+            h('h2', null, ['抽参套参检查'])
+          ]),
+          h(Row, { gutter: 8 }, () => [
+            h(Col, $colAttrs0, () => [
+              data.error != null ? h(Alert, { type: 'error', style: 'margin-bottom:8px' }, () => [data.error.message]) : null,
+              data.files == null ? h(Alert, { type: 'info', style: 'margin-bottom:8px' }, () => [
+                '请拖入两个 f0 文件，可通过 ', h('a', { href: 'https://bolanxian.github.io/koharu-label/' }, ['Koharu Label']), ' 获得。'
+              ]) : null,
+              data.files != null ? h(Card, { title: '文件', style: 'margin-bottom:8px' }, () => [
+                h(CellGroup, {}, () => Array.from(data.files, file => h(Cell, {
+                  title: `${file.name}`
+                })))
+              ]) : null,
+              data.resultList != null ? Array.from(data.resultList, ({ title, content }) => h(Card, {
+                title: `${title}`, style: 'margin-bottom:8px'
+              }, () => [h('pre', null, [content])])) : null,
+              data.loading ? h(Alert, { style: 'margin-top:8px' }, () => ['加载中']) : null,
+            ])
+          ])
+        ]
+      }
+    }).mount('#app')
+  </script>
+</head>
+
+<body>
+  <div id="app" style="padding:0 4px"></div>
+</body>
+
+</html>
