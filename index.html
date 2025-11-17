@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Index - 僠儖僲</title>
+<link rel="author" href="https://space.bilibili.com/517723/" title="僠儖僲">
+<link rel="stylesheet" href="https://unpkg.com/view-ui-plus@1.3.21/dist/styles/viewuiplus.css">
+<script type="module">
+  import { parse } from 'https://unpkg.com/marked@16.4.1/lib/marked.esm.js'
+  class Markdown extends HTMLElement {
+    connectedCallback() {
+      const use = super.getAttribute('data-use')
+      const text = document.querySelector(use).textContent
+      super.innerHTML = parse(text)
+    }
+    disconnectedCallback() {
+      super.innerHTML = ''
+    }
+  }
+  customElements.define('mark-down', Markdown)
+</script>
+<script type="text/plain" id="main">
+# &#x3000;
+&#x3000;  
+## 可在线使用
+*****
+### [Koharu Label](https://bolanxian.github.io/koharu-label/)
+- 将标注文件和音高组合为 Synthesizer V Studio 工程文件或 OpenUtau 工程文件。
+- [歌词转换工具](https://bolanxian.github.io/koharu-label/#lyric)
+*****
+### [Media Player](https://bolanxian.github.io/media-player/)
+*****
+### [活字印刷语音](https://bolanxian.github.io/movable-type-voice/)
+*****
+&#x3000;  
+## 可在线使用（单文件）
+*****
+### [歌词渲染工具](https://bolanxian.github.io/documents/lyrics-render)
+*****
+### [PolygonMovieMaker(.pmm) Parse](https://bolanxian.github.io/documents/pmm-parse)
+- 解析 pmm文件 中的模型路径等
+*****
+### [抽参套参检查](https://bolanxian.github.io/documents/f0-analyzer)
+- 基于 [尊贵的阿昆达](https://space.bilibili.com/12131593/) 的 [SV脚本](https://www.bilibili.com/video/av114976777836578/)
+*****
+&#x3000;  
+## 编译型
+*****
+### [Metadata Fetcher](https://github.com/bolanxian/metadata-fetcher)
+- 元数据获取&借物表生成器
+- [在线版](https://bolanxian.github.io/metadata-fetcher/)（只能解析链接）
+*****
+### [Anti-GPU Encrypter](https://github.com/bolanxian/AGE)
+- 抵抗 GPU 攻击的加密工具
+*****
+### [Tauri-less](https://github.com/bolanxian/tauri-less)
+- 静态Web打包工具
+*****
+&#x3000;  
+## 油猴脚本
+*****
+### [Bilibili 显示视频分区、av号等](https://greasyfork.org/zh-CN/scripts/421050)
+*****
+</script>
+
+<body>
+  <div style="padding:0 4px">
+    <div class="ivu-row" style="margin-left:-4px;margin-right:-4px;">
+      <div class="
+  ivu-col ivu-col-span-xs-24 ivu-col-span-sm-20 ivu-col-sm-offset-2
+  ivu-col-span-md-16 ivu-col-md-offset-4 ivu-col-span-lg-12 ivu-col-lg-offset-6
+      " style="padding-left:4px;padding-right:4px;">
+        <mark-down data-use="#main"></mark-down>
+      </div>
+    </div>
+  </div>
+
+</body>

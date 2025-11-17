@@ -36,7 +36,7 @@
     /**
      * https://github.com/Inwerwm/MikuMikuMethods/blob/master/MikuMikuMethods/Pmm/IO/PmmFileReader.cs
      */
-    const parse = (_buffer) => {
+    const parsePmmFile = (_buffer) => {
       const readString = () => {
         const length = view.getUint8(ptr, true); ptr += 1
         const sub = new Uint8Array(_buffer, ptr, length); ptr += length
@@ -170,7 +170,7 @@
           })
         })
         const data = shallowReactive({
-          error: null,
+          errorList: [],
           loading: false,
           name: null,
           pmm: null,
@@ -178,28 +178,41 @@
         })
         const handleFile = async (file) => {
           try {
+            const errorList = data.errorList = []
             data.loading = true
-            data.error = data.name = data.pmm = data.pathList = null
-            const head = sjis.decode(await file.slice(0, 30).arrayBuffer())
-            if (!head.startsWith("Polygon Movie maker 0002\0")) {
-              throw new TypeError("This is not PMM file.")
-            }
-            const _buffer = await file.arrayBuffer()
-            data.pmm = parse(_buffer)
             data.name = file.name
+            data.pmm = data.pathList = null
+
+            try { data.pmm = await parsePmm(file) }
+            catch (error) { errorList[errorList.length] = error }
+
             await new Promise(ok => { setTimeout(ok, 0) })
-            const pathList = data.pathList = [], buffer = new Uint8Array(_buffer)
-            let str = ''; for (const $ of buffer) { str += chr($) }
-            for (const m of str.matchAll(/[A-Za-z]:[^\x00-\x1F]+?\.[A-Za-z]{1,4}(?=\0)/g)) {
-              const buf = new Uint8Array(_buffer, m.index, m[0].length)
-              pathList[pathList.length] = new SjisString(buf)
-            }
-          } catch (e) {
-            data.error = e
+
+            try { data.pathList = parsePaths(await file.arrayBuffer()) }
+            catch (error) { errorList[errorList.length] = error }
+
+          } catch (error) {
+            errorList[errorList.length] = error
           } finally {
             data.loading = false
             console.log({ ...data })
           }
+        }
+        const parsePmm = async (file) => {
+          const head = sjis.decode(await file.slice(0, 30).arrayBuffer())
+          if (!head.startsWith("Polygon Movie maker 0002\0")) {
+            throw new TypeError("This is not PMM file.")
+          }
+          return parsePmmFile(await file.arrayBuffer())
+        }
+        const parsePaths = (_buffer) => {
+          const pathList = [], buffer = new Uint8Array(_buffer)
+          let str = ''; for (const $ of buffer) { str += chr($) }
+          for (const m of str.matchAll(/[A-Za-z]:[^\x00-\x1F]+?\.[A-Za-z]{1,4}(?=\0)/g)) {
+            const buf = new Uint8Array(_buffer, m.index, m[0].length)
+            pathList[pathList.length] = new SjisString(buf)
+          }
+          return pathList
         }
 
         const $colAttrs0 = { xs: 24, sm: { span: 20, offset: 2 }, md: { span: 16, offset: 4 }, lg: { span: 12, offset: 6 } }
@@ -209,9 +222,15 @@
           ]),
           h(Row, { gutter: 8 }, () => [
             h(Col, $colAttrs0, () => [
-              data.error != null ? h(Alert, { type: 'error' }, () => [data.error.message]) : null,
+              data.errorList.length > 0 ? Array.from(data.errorList, error => {
+                return h(Alert, { type: 'error', style: 'margin-bottom:8px' }, () => [error.message])
+              }) : null,
+              data.name == null ? h(Alert, { type: 'info', style: 'margin-bottom:8px' }, () => ['请拖入 pmm 文件。']) : null,
               data.pmm != null ? h(Card, {
-                title: `[${data.pmm.outputResolutionWidth}\xD7${data.pmm.outputResolutionHeight}]${data.name}`
+                title: `[\
+${data.pmm.outputResolutionWidth}\xD7\
+${data.pmm.outputResolutionHeight}]${data.name}`,
+                style: 'margin-bottom:8px'
               }, () => [
                 h(CellGroup, {}, () => Array.from(data.pmm.modelList, model => h(Cell, {
                   selected: model.id === data.pmm.selectedModelIndex
@@ -226,12 +245,12 @@
                   ],
                 })))
               ]) : null,
-              data.pathList != null ? h(Card, { title: 'Path', style: 'margin-top:8px' }, () => [
+              data.pathList != null ? h(Card, { title: 'Path', style: 'margin-bottom:8px' }, () => [
                 h(CellGroup, {}, () => Array.from(data.pathList, path => h(Cell, {
                   title: `${path}`, label: path.gbk
                 })))
               ]) : null,
-              data.loading ? h(Alert, { style: 'margin-top:8px' }, () => ['加载中']) : null,
+              data.loading ? h(Alert, { style: 'margin-bottom:8px' }, () => ['加载中']) : null,
             ])
           ])
         ]
