@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html>
 
 <head>
-  <meta charset="utf-8">
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lyrics Render</title>
   <link rel="icon"
@@ -13,6 +13,15 @@
 
   <script src="https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://unpkg.com/fflate@0.8.2/umd/index.js"></script>
+  <script src="https://unpkg.com/markdown-it@14.1.0/dist/markdown-it.min.js"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "markdown-it-ruby": "https://unpkg.com/markdown-it-ruby@1.1.2/index.mjs"
+    }
+  }
+  </script>
+
   <style>
     .container {
       margin: 0 auto;
@@ -82,19 +91,20 @@
 
 <body>
   <div id="app"></div>
-  <script>
-    !(function (root, factory) {
-      factory(root.Vue, root.iview, root.html2canvas, root.fflate)
-    })(this, function (Vue, iview, html2canvas, fflate) {
-      'use strict'
-      const { Row, Col, Input, Button, Switch } = iview
-      const raf = requestAnimationFrame
-      const nextFrame = () => new Promise(raf)
-      const ready = new Promise(ok => {
+  <script type="module">
+    const { Vue, iview, html2canvas, fflate, markdownit: MarkdownIt } = window
+    const { Row, Col, Input, Button, Switch } = iview
+    const raf = requestAnimationFrame
+    const nextFrame = () => new Promise(raf)
+    const ready = Promise.all([
+      new Promise(ok => {
         if (document.hasFocus()) { return ok() }
         document.addEventListener('focus', ok, { once: !0, capture: !0 })
-      })
-
+      }),
+      import('markdown-it-ruby').then($ => { MarkdownItRuby = $.default })
+    ])
+    let MarkdownItRuby
+    {
       const _vm = new Vue({
         data() {
           return {
@@ -113,14 +123,14 @@
           }
         },
         mounted() {
-          this.lyrics = '[敏捷的棕色狐狸跳过懒惰的狗-The quick brown fox jumps over the lazy dog.-]'
+          this.lyrics = '{敏捷的棕色狐狸跳过懒惰的狗|The quick brown fox jumps over the lazy dog.}'
           let style = document.querySelector('style.user-custom').textContent
           style = style.replace(/^\s*(?<=\n)|(?=\n)\s*$/g, '')
           const start = style.match(/^(\s*)[^\n]*?(?:\n|\n\1[^\n]*?)+$/)?.[1].length ?? 0
           style = style.split('\n').map(line => line.slice(start)).join('\n')
           switch (location.hash) {
             case '#mujica': {
-              this.lyrics = '[颂-ソ-][乐-ラ-][人-にん-][偶-ぎょう-]'
+              this.lyrics = '{颂|ソ}{乐|ラ}{人|にん}{偶|ぎょう}'
               style = style.replace('--font-family', 'font-family')
               style = style.replace('font-size: .5em', 'font-size: .33em')
               style = style.replace('--background-image: var(--rainbow-vertical);',
@@ -131,29 +141,28 @@
         },
         methods: {
           async handleInner() {
+            const md = new MarkdownIt()
+            md.use(MarkdownItRuby)
             const vm = this, { texts } = vm.$refs
             document.querySelector('style.user-custom').textContent = vm.style
             const lyrics = vm.lyrics.split('\n')
             const files = {}
             let i = 0; for (; i < lyrics.length; i++) {
               vm.log = `${i}/${lyrics.length}`
+              let lyric = lyrics[i]
+              lyric = lyric.replace(/^\[@(.*?)\]/, '')
+              lyric = lyric.replace(/\[(.*?)-(.*?)-\]/g, '{$1|$2}')
+              lyric = md.renderInline(lyric)
+
               const el = document.createElement('div')
               el.classList.add('text')
-              el.innerHTML = ((lyric) => {
-                lyric = lyric.replace(/^\[@(.*?)\]/, '')
-                let i = 0, ret = ''
-                for (const m of lyric.matchAll(/\[(.*?)-(.*?)-\]/g)) {
-                  if (i < m.index) {
-                    ret += `<span>${lyric.slice(i, m.index)}</span>`
-                  }
-                  ret += `<ruby><rp>[</rp>${m[1]}<rp>-</rp><rt>${m[2]}</rt><rp>-]</rp></ruby>`
-                  i = m.index + m[0].length
-                }
-                if (i < lyric.length) {
-                  ret += `<span>${lyric.slice(i, lyric.length)}</span>`
-                }
-                return ret
-              })(lyrics[i])
+              el.innerHTML = lyric
+              for (const node of [...el.childNodes]) {
+                if (node.nodeType !== Node.TEXT_NODE) { continue }
+                const span = document.createElement('span')
+                el.replaceChild(span, node)
+                span.append(node)
+              }
               texts.append(el)
               await nextFrame()
               const canvas = await html2canvas(el)
@@ -181,9 +190,7 @@
               ctx.globalCompositeOperation = 'source-in'
               ctx.drawImage(background, 0, 0)
 
-              const blob = await new Promise(ok => {
-                canvas.toBlob(ok, 'image/png')
-              })
+              const blob = await fetch(canvas.toDataURL('image/png'))
               files[`${i}.png`] = new Uint8Array(await blob.arrayBuffer())
               canvas.style.display = 'block'
               texts.append(canvas)
@@ -288,18 +295,17 @@
       def(_vm, 'color')
       ready.then(e => { _vm.$mount('#app') })
       Object.assign(window, { _vm })
-
-      const colors = Array.from({ length: 271 }, (_, i) => {
-        return `hsl(${i}deg 100% 50%) ${(i / 270) * 55 + 25}%`
-      }).join(',\n')
-      const $style = document.createElement('style')
-      $style.textContent = `\
+    }
+    const colors = Array.from({ length: 271 }, (_, i) => {
+      return `hsl(${i}deg 100% 50%) ${(i / 270) * 55 + 25}%`
+    }).join(',\n')
+    const $style = document.createElement('style')
+    $style.textContent = `\
 .text-container {
 --rainbow-horizontal: linear-gradient(.25turn,\n${colors}\n);
 --rainbow-vertical: linear-gradient(.5turn,\n${colors}\n);
 }`
-      document.body.append($style)
-    })
+    document.body.append($style)
   </script>
 </body>
 
