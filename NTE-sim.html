@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NTE Gacha Simulator</title>
+  <meta name="author" content="僠儖僲">
+  <link rel="author" href="https://space.bilibili.com/517723/">
+  <link rel="icon"
+    href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%22-50%20-59%20100%20100%22%3E%3Ctext%20font-size%3D%2290%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%3E%F0%9F%8E%B2%3C%2Ftext%3E%3C%2Fsvg%3E">
+  <link rel="stylesheet" href="https://unpkg.com/view-ui-plus@1.3.21/dist/styles/viewuiplus.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "vue": "https://unpkg.com/vue@3.5.22/dist/vue.runtime.esm-browser.js",
+        "iview": "https://unpkg.com/view-ui-plus@1.3.21/dist/viewuiplus.min.esm.js"
+      }
+    }
+  </script>
+  <script type="module">
+    /**
+     * @createDate 2026-05-18
+     */
+    import { createApp, shallowReactive, createVNode as h, onMounted } from 'vue'
+    import { Row, Col, Card, Button, ButtonGroup, Input } from 'iview'
+    const SVG = 'http://www.w3.org/2000/svg'
+    const { keys, entries, fromEntries } = Object
+    const { from } = Array
+    const { abs } = Math
+
+    const nodeMap = {
+      '于此同行-S': { rare: 'S', text: '👤' },
+      '于此同行-A': { rare: 'A', text: '👤' },
+      '勇者宝箱': { rare: 'S', text: '🎁' },
+      '学徒宝箱': { rare: 'A', text: '🎁' },
+      '多重惊喜': { rare: 'S', text: '🎲' },
+      '再来一次': { rare: 'A', text: '🎲' },
+      '今日穿搭': { rare: 'S', text: '👕' },
+      '改装时刻·涂装': { rare: 'S', text: '🚘' },
+      '风向标': { rare: 'A', text: '\u{1FA81}' },
+      '弧光盲盒': { rare: 'A', text: '📀' },
+      '迷迭棋盒': { rare: 'B', text: '♟️' },
+    }
+
+    const size = [27, 11]
+    const nodeList = [
+      {
+        start: [7, 8],
+        list: [
+          { type: '勇者宝箱', next: 'L' },
+          '于此同行-A',
+          { type: '学徒宝箱', next: 'U' },
+          '迷迭棋盒',
+          '学徒宝箱',
+          '迷迭棋盒',
+          '勇者宝箱',
+          '学徒宝箱',
+          '于此同行-A',
+          { type: '迷迭棋盒', next: 'R' },
+          '学徒宝箱',
+          '学徒宝箱',
+          '勇者宝箱',
+          '再来一次',
+          '学徒宝箱',
+          '弧光盲盒',
+          { type: '迷迭棋盒', next: 'D' },
+          '学徒宝箱',
+          '勇者宝箱',
+          { type: '于此同行-A', next: 'R' },
+          '学徒宝箱',
+          '风向标',
+          { type: '学徒宝箱', next: 'U' },
+          '学徒宝箱',
+          '勇者宝箱',
+          { type: '学徒宝箱', next: 'R' },
+          '学徒宝箱',
+          '迷迭棋盒',
+          { type: '于此同行-A', next: 'D' },
+          '学徒宝箱',
+          '勇者宝箱',
+          { type: '学徒宝箱', next: 'R' },
+          '学徒宝箱',
+          { type: '迷迭棋盒', next: 'D' },
+          '学徒宝箱',
+          '于此同行-A',
+          '勇者宝箱',
+          '学徒宝箱',
+          '学徒宝箱',
+          { type: '迷迭棋盒', next: 'L' },
+          '弧光盲盒',
+          '学徒宝箱',
+          '勇者宝箱',
+          '学徒宝箱',
+          { type: '学徒宝箱', next: 'U' },
+          { type: '迷迭棋盒', next: 'L' },
+          '学徒宝箱',
+          '于此同行-A',
+          '勇者宝箱',
+          '学徒宝箱',
+          '学徒宝箱',
+          { type: '迷迭棋盒', next: 'U' },
+          { type: '学徒宝箱', next: 'L' },
+          '学徒宝箱',
+        ]
+      },
+      {
+        start: [3, 3],
+        list: [
+          { type: '勇者宝箱', next: 'L' },
+          '今日穿搭',
+          { type: '多重惊喜', next: 'U' },
+          '勇者宝箱',
+          '勇者宝箱',
+          { type: '勇者宝箱', next: 'R' },
+          '勇者宝箱',
+          { type: '勇者宝箱', next: 'D' },
+          '勇者宝箱',
+        ]
+      },
+      {
+        start: [22, 5],
+        list: [
+          { type: '于此同行-S', next: 'R' },
+          '改装时刻·涂装',
+          '勇者宝箱',
+          { type: '学徒宝箱', next: 'D' },
+          '勇者宝箱',
+          { type: '学徒宝箱', next: 'L' },
+          '勇者宝箱',
+          '学徒宝箱',
+          '勇者宝箱',
+        ]
+      }
+    ]
+
+    const app = createApp({
+      setup(props, { expose }) {
+        const _nodeData = { __proto__: null }
+        for (const name of keys(nodeMap)) { _nodeData[name] = 0 }
+        const nodeData = shallowReactive(_nodeData)
+
+        const data = shallowReactive({
+          svg: null,
+          loading: false,
+          total: 0,
+          message: '点数,名称\n',
+        })
+
+        onMounted(() => {
+          const { svg } = data
+          const template = document.querySelector('svg.template')
+          template.remove()
+          svg.append(template.querySelector('style'))
+          svg.append(template.querySelector('defs > text#dice'))
+
+          const defs = document.createElementNS(SVG, 'defs')
+          defs.append(template.querySelector('defs > g#pointer'))
+          svg.append(defs)
+
+          const ptr = document.createElementNS(SVG, 'use')
+          ptr.setAttribute('href', '#pointer')
+          const [x, y] = nodeList[0].start
+          ptr.setAttribute('x', `${x}`)
+          ptr.setAttribute('y', `${y}`)
+          svg.append(ptr)
+
+          const _g = template.querySelector('defs > g.node')
+          for (const [name, { rare, text }] of entries(nodeMap)) {
+            const g = document.importNode(_g, true)
+            g.id = name
+            g.classList.add(`rare-${rare}`)
+            g.querySelector('text').textContent = text
+            defs.append(g)
+          }
+          for (const { start, list } of nodeList) {
+            let prev = null
+            let next = 'U'
+            let [x, y] = start
+            for (let data of list) {
+              if (typeof data !== 'string') { void ({ type: data, next } = data) }
+              const use = document.createElementNS(SVG, 'use')
+              use.setAttribute('href', `#${data}`)
+              use.setAttribute('x', `${x}`)
+              use.setAttribute('y', `${y}`)
+              svg.append(use)
+
+              prev?.setAttribute('data-next', `${x},${y}`)
+              prev = use
+              switch (next) {
+                case 'U': y--; break
+                case 'L': x--; break
+                case 'R': x++; break
+                default: y++; break
+              }
+            }
+          }
+          svg.querySelector(':scope > use[x="8"][y="8"]').setAttribute('data-next', '7,8')
+          svg.querySelector(':scope > use[x="3"][y="1"]').setAttribute('data-next', '5,1')
+          svg.querySelector(':scope > use[x="22"][y="7"]').setAttribute('data-next', '20,7')
+
+          svg.querySelector(':scope > use[x="5"][y="3"]').setAttribute('data-special-next', '3,3')
+          svg.querySelector(':scope > use[x="20"][y="5"]').setAttribute('data-special-next', '22,5')
+        })
+
+        let isProcess = false
+        const nextCell = (ptr, toX, toY) => new Promise(ok => {
+          let x = ptr.getAttribute('x'), y = ptr.getAttribute('y')
+          let lenX = toX - x, lenY = toY - y
+          let len = (abs(lenX) + abs(lenY)) * 10, i = len
+          const frame = () => {
+            if (--i > 0) { requestAnimationFrame(frame) } else { ok() }
+
+            ptr.setAttribute('x', `${toX - (i * lenX / len)}`)
+            ptr.setAttribute('y', `${toY - (i * lenY / len)}`)
+          }
+          requestAnimationFrame(frame)
+        })
+        const nextInner = async (i) => {
+          const { svg } = data
+          svg.querySelector(':scope > text#dice').textContent = '\0\u2680\u2681\u2682\u2683\u2684\u2685'[i]
+          const ptr = svg.querySelector(':scope > use[href="#pointer"]')
+          let x = ptr.getAttribute('x'), y = ptr.getAttribute('y')
+
+          let getAttribute = (cell) => cell.getAttribute('data-special-next') ?? cell.getAttribute('data-next')
+          const getAttributeNext = (cell) => cell.getAttribute('data-next')
+
+          let cell, next; for (let j = i; j > 0; j--) {
+            cell = svg.querySelector(`:scope > use[x="${x}"][y="${y}"][data-next]`)
+            next = getAttribute(cell)
+            getAttribute = getAttributeNext
+            void ([x, y] = String(next).split(','))
+            await nextCell(ptr, x, y)
+            ptr.setAttribute('x', `${x}`)
+            ptr.setAttribute('y', `${y}`)
+          }
+          cell = svg.querySelector(`:scope > use[x="${x}"][y="${y}"][data-next][href]`)
+          const name = String(cell.getAttribute('href')).slice(1)
+          nodeData[name]++
+          data.total++
+          data.message += `${i},${name}\n`
+        }
+        const next = async (length) => {
+          if (data.loading) { return }
+          data.loading = true
+          const buf = new Uint8Array(1)
+          try {
+            for (let i = 0; i < length; i++) {
+              crypto.getRandomValues(buf)
+              await nextInner(buf[0] % 6 + 1)
+              await new Promise(ok => {
+                let i = 10
+                const frame = () => {
+                  if (--i > 0) { requestAnimationFrame(frame) } else { ok() }
+                }
+                requestAnimationFrame(frame)
+              })
+
+            }
+          } finally {
+            data.loading = false
+          }
+        }
+        expose({ nextCell, nextInner, next })
+        return () => h(Row, { gutter: 8, style: 'margin:20px 10px 0' }, () => [
+          h(Col, { span: 18 }, () => [
+            h('svg', {
+              xmlns: SVG,
+              viewBox: `0 0 ${size[0]} ${size[1]}`,
+              style: "width:100%",
+              ref(el) { data.svg = el },
+            }),
+            h(Row, null, () => [
+              from(keys(nodeMap), (name) => h(Col, { span: 6 }, () => [
+                h(Card, null, () => [
+                  h('svg', { xmlns: SVG, viewBox: '0 0 1 1', style: "width:2em" }, [
+                    h('use', { href: `#${name}` })
+                  ]),
+                  h('span', { style: 'font-size:1.25em;font-weight:bold' }, [
+                    `${name}(${nodeData[name]})`
+                  ]),
+                ])
+              ])),
+              h(Col, { span: 6 }, () => [
+                h(Card, null, () => [
+                  h('span', { style: 'font-size:1.25em;font-weight:bold' }, [`总计：${data.total}`])
+                ])
+              ]),
+              h(Col, { span: 6 }, () => [
+                h(Card, null, () => [
+                  h(ButtonGroup, null, () => [
+                    h(Button, { disabled: data.loading, onClick() { next(1) } }, () => ['单抽']),
+                    h(Button, { disabled: data.loading, onClick() { next(10) } }, () => ['十连']),
+                  ])
+                ])
+              ])
+            ])
+          ]),
+          h(Col, { span: 6 }, () => [
+            h(Input, {
+              type: 'textarea',
+              autosize: true,
+              readonly: true,
+              modelValue: data.message
+            })
+          ])
+        ])
+      }
+    })
+    const vm = app.mount('#app')
+    window.vm = vm
+    /**
+      for(const i of [6,6,1,2,3,3,3,6,4,1]){await vm.nextInner(i)}
+    */
+  </script>
+</head>
+
+<body>
+  <div id="app"></div>
+  <svg xmlns="http://www.w3.org/2000/svg" class="template" viewBox="0 0 0 0" style="display:none">
+    <style>
+      .node.rare-S rect {
+        fill: #FC3;
+      }
+
+      .node.rare-A rect {
+        fill: #A8F;
+      }
+
+      .node.rare-B rect {
+        fill: #79E;
+      }
+
+      .node text,
+      text#dice {
+        font-size: .70px;
+        user-select: none;
+        text-anchor: middle;
+        dominant-baseline: middle;
+      }
+    </style>
+    <defs>
+      <g id="pointer">
+        <rect rx=".1" ry=".1" x="-.05" y="-.05" width="1.1" height="1.1" fill="#F00" />
+      </g>
+      <g class="node">
+        <rect rx=".1" ry=".1" x=".05" y=".05" width=".9" height=".9" />
+        <text x=".5" y=".55"></text>
+      </g>
+      <text id="dice" x="2.5" y="8" style="font-size:2px"></text>
+    </defs>
+  </svg>
+</body>
+
+</html>
